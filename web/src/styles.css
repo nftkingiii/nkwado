@@ -312,3 +312,4 @@ body.v-viewing { overflow: hidden; }
   .voucher { box-shadow: none !important; border: 1px solid #ccc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .v-spine::after { background: none; border-right: 1px dashed rgba(244, 235, 221, 0.6); }
 }
+.mine { margin: 0; font: italic 14px var(--serif); color: var(--gold); }

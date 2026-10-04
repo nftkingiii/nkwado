@@ -252,6 +252,7 @@ function SendTab({ signerFor, mode, wallet }) {
       const now = await S.ledgerNow();
       const expiresAt = now + win + 30;
       const r = await S.pledge(s, { clinic, service, amount: svc.price, expiresAt, codeHash });
+      S.saveCode(r.id, secret);
       setDone({ ...r, secret, expiresAt, clinic, service, amount: svc.price, topupTx });
       setStep(4);
     } catch (e) {
@@ -459,7 +460,9 @@ function PatientCard({ route, onClinic }) {
       try {
         const pl = await S.getPledge(route.id);
         setP(pl);
-        setMatch((await S.sha256Hex(route.secret)) === pl.codeHash);
+        const ok = (await S.sha256Hex(route.secret)) === pl.codeHash;
+        if (ok) S.saveCode(route.id, route.secret);
+        setMatch(ok);
       } catch (e) {
         setErr(S.explainError(e).text);
       }
@@ -764,9 +767,14 @@ const EVENT_LABEL = { pledged: 'Issued', redeemed: 'Redeemed', refunded: 'Return
 
 function PledgeRow({ p, events = [], now, onRefund, busy }) {
   const canRefund = p.status === 'Open' && now >= p.expiresAt;
+  const status = voucherStatus(p, now);
+  const secret = S.savedCode(p.id);
+  const code = secret && status === 'Open' ? S.formatCode(p.id, secret) : null;
   return (
     <li className="prow">
-      <Voucher id={p.id} service={p.service} clinic={p.clinic} amount={p.amount} expiresAt={p.expiresAt} closedAt={p.closedAt} status={voucherStatus(p, now)} size="sm" />
+      <Voucher id={p.id} service={p.service} clinic={p.clinic} amount={p.amount} expiresAt={p.expiresAt} closedAt={p.closedAt} status={status} size="sm"
+        qrText={secret && status === 'Open' ? code || S.redeemLink(p.id, secret) : null} code={code} />
+      {secret && <p className="mine">{code ? 'Code saved in this browser only.' : 'Sent or opened in this browser.'}</p>}
       <StatusLine p={p} now={now} />
       <div className="pev">
         {events.map((e) => (

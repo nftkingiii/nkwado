@@ -42,6 +42,25 @@ function normalizeCode(raw) {
 
 const pad4 = (id) => String(id).padStart(4, '0');
 
+// Codes issued or opened on this device, kept only in this browser so the
+// sender can bring the QR back later. Never sent anywhere.
+const CODES_KEY = `nkwado.codes.${CONTRACT_ID}`;
+function readCodes() {
+  try {
+    return JSON.parse(localStorage.getItem(CODES_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+export function saveCode(id, secret) {
+  try {
+    localStorage.setItem(CODES_KEY, JSON.stringify({ ...readCodes(), [id]: secret }));
+  } catch {
+    /* private mode or storage blocked: the code just isn't remembered */
+  }
+}
+export const savedCode = (id) => readCodes()[id] || null;
+
 // "0005-K7QF-M2XA-9TPR-HD3W": voucher number, then the code in groups of four.
 export function formatCode(id, secret) {
   if (secret.length !== 16) return null; // vouchers issued before short codes existed
