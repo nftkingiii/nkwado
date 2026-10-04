@@ -1,0 +1,14 @@
+[
+  { "shot": "01", "text": "Families abroad often send money home for a medical scan. But it arrives as plain cash, and nobody can tell whether it ever became the scan." },
+  { "shot": "01b", "text": "Nkwado locks that money to the scan itself, on Stellar." },
+  { "shot": "02", "text": "This is the live app, in demo mode on Stellar testnet. Each payment becomes a voucher: one named service, at one verified clinic." },
+  { "shot": "03", "text": "I pick Lagoon Imaging, which the contract's registry shows as verified, and a pelvic ultrasound. The voucher updates as I choose." },
+  { "shot": "04", "text": "The demo account is short on USDC, so Nkwado buys the exact amount with XLM, through a Stellar path payment." },
+  { "shot": "05", "text": "Then I lock it. Twenty USDC moves into a Soroban contract, and the voucher gets a number, a QR code, and a short code. Only a fingerprint of that code is stored on chain." },
+  { "shot": "06", "text": "The patient gets the voucher on their phone, and shows it at reception." },
+  { "shot": "07", "text": "Now the clinic side. Udi Hills types the code. It matches, but the voucher is addressed to a different clinic. If they press redeem anyway, the contract refuses, and nothing moves." },
+  { "shot": "08", "text": "At Lagoon Imaging, every check passes. One click, and twenty USDC is paid to the clinic. Here is the transaction on Stellar Expert." },
+  { "shot": "09", "text": "Every voucher ends one of two ways: redeemed by the named clinic, or, if the patient never goes, returned to the sender once it expires." },
+  { "shot": "10", "text": "Under the hood: Circle's USDC through its Stellar asset contract, a Soroban contract that holds the money, and path payments to fund it from XLM." },
+  { "shot": "11", "text": "Nkwado. Pay for the scan, not the promise." }
+]

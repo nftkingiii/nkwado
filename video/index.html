@@ -1,0 +1,241 @@
+<!doctype html>
+<!-- Nkwado judge demo. A seek(t) film: every frame is a pure function of t. Product pixels are real recordings of
+     https://nkwado.up.railway.app (capture.mjs flows, 2026-10-04); type, camera, subtitles and the diagram are code-drawn. -->
+<html><head><meta charset="utf-8"><title>Nkwado demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Inter+Tight:wght@400;500;600&display=block" rel="stylesheet">
+<style>html,body{margin:0;background:#201819}canvas{display:block;max-width:100vw;max-height:100vh;margin:auto}</style>
+</head><body>
+<canvas id="c"></canvas>
+<script src="lib/motion.js"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const W = +(Q.get('w') || 1920), H = +(Q.get('h') || 1080);
+window.FILM = { w: W, h: H, dur: 112, fps: 30 };
+const L = layout(W, H), u = L.u;
+
+// The app's own tokens (web/src/styles.css)
+const C = { room: '#201819', room2: '#2a2021', paper: '#f4ebdd', ink: '#201819', gold: '#dbc895', text2: '#b9a99a', text3: '#8a7b6f',
+  ok: '#b5cfa3', bad: '#eba196', navy: '#2b3a67', red: '#8a3530', green: '#2f5444' };
+const F = { serif: '"Newsreader", Georgia, serif', sans: '"Inter Tight", system-ui, sans-serif' };
+
+const cv = document.getElementById('c'); cv.width = W; cv.height = H;
+const g = cv.getContext('2d');
+
+// ---- Assets (real captures only)
+const IMG = {};
+function img(name, src) { const i = new Image(); i.src = src; IMG[name] = i; return i.decode().catch(() => { IMG[name] = null; console.warn('missing asset: ' + src); }); }
+const SEQ = {};
+function seq(name, dir, fps, frames) { SEQ[name] = { dir, fps, frames, cache: new Map() }; }
+async function seqFrame(name, t) {
+  const s = SEQ[name]; if (!s) return null;
+  const n = Math.min(s.frames, Math.max(1, Math.floor(t * s.fps) + 1)), key = String(n).padStart(5, '0');
+  if (!s.cache.has(key)) { const i = new Image(); i.src = `${s.dir}/${key}.jpg`; s.cache.set(key, i.decode().then(() => i, () => null)); if (s.cache.size > 120) s.cache.delete(s.cache.keys().next().value); }
+  return s.cache.get(key);
+}
+seq('send', 'assets/capture/send/flow', 30, 1145);
+seq('patient', 'assets/capture/patient/flow', 30, 275);
+seq('clinic', 'assets/capture/clinic/flow', 30, 1152);
+window.ready = Promise.all([
+  document.fonts.load(`400 100px ${F.serif}`), document.fonts.load(`italic 400 100px ${F.serif}`), document.fonts.load(`500 100px ${F.serif}`),
+  document.fonts.load(`400 100px ${F.sans}`), document.fonts.load(`500 100px ${F.sans}`), document.fonts.load(`600 100px ${F.sans}`),
+  img('explorer', 'assets/capture/explorer/screen-1920x1080.png'),
+]);
+
+// ---- Narration (Kokoro af_heart, audio/vo/timings.json). Each line starts at `at` seconds.
+const VO = [
+  { at: 0.8, dur: 8.53, text: 'Families abroad often send money home for a medical scan. But it arrives as plain cash, and nobody can tell whether it ever became the scan.' },
+  { at: 10.0, dur: 3.11, text: 'Nkwado locks that money to the scan itself, on Stellar.' },
+  { at: 14.0, dur: 8.64, text: 'This is the live app, in demo mode on Stellar testnet. Each payment becomes a voucher: one named service, at one verified clinic.' },
+  { at: 23.7, dur: 8.45, text: "I pick Lagoon Imaging, which the contract's registry shows as verified, and a pelvic ultrasound. The voucher updates as I choose." },
+  { at: 33.6, dur: 7.19, text: 'The demo account is short on USDC, so Nkwado buys the exact amount with XLM, through a Stellar path payment.' },
+  { at: 41.8, dur: 11.33, text: 'Then I lock it. Twenty USDC moves into a Soroban contract, and the voucher gets a number, a QR code, and a short code. Only a fingerprint of that code is stored on chain.' },
+  { at: 54.2, dur: 3.67, text: 'The patient gets the voucher on their phone, and shows it at reception.' },
+  { at: 60.2, dur: 11.2, text: 'Now the clinic side. Udi Hills types the code. It matches, but the voucher is addressed to a different clinic. If they press redeem anyway, the contract refuses, and nothing moves.' },
+  { at: 73.2, dur: 8.32, text: 'At Lagoon Imaging, every check passes. One click, and twenty USDC is paid to the clinic. Here is the transaction on Stellar Expert.' },
+  { at: 84.4, dur: 8.49, text: 'Every voucher ends one of two ways: redeemed by the named clinic, or, if the patient never goes, returned to the sender once it expires.' },
+  { at: 94.6, dur: 9.05, text: "Under the hood: Circle's USDC through its Stellar asset contract, a Soroban contract that holds the money, and path payments to fund it from XLM." },
+  { at: 105.0, dur: 2.65, text: 'Nkwado. Pay for the scan, not the promise.' },
+];
+// Subtitle chunks: split each line at clause breaks, timed by character count.
+const SUBS = [];
+for (const v of VO) {
+  const parts = v.text.match(/[^.,:;]+[.,:;]?/g).map(s => s.trim()).filter(Boolean);
+  const chunks = []; let cur = '';
+  for (const p of parts) { if ((cur + ' ' + p).trim().length > 68 && cur) { chunks.push(cur); cur = p; } else cur = (cur + ' ' + p).trim(); }
+  if (cur) chunks.push(cur);
+  const total = chunks.reduce((a, c) => a + c.length, 0); let t = v.at;
+  for (const c of chunks) { const d = v.dur * c.length / total; SUBS.push({ from: t, to: t + d, text: c }); t += d; }
+}
+
+// ---- Drawing helpers
+function text(str, x, y, size, o = {}) {
+  g.save(); g.font = `${o.italic ? 'italic ' : ''}${o.weight || 400} ${size}px ${o.font || F.serif}`; g.fillStyle = o.color || C.paper;
+  g.textAlign = o.align || 'center'; g.textBaseline = o.base || 'middle'; g.globalAlpha *= o.alpha ?? 1;
+  if (o.track) g.letterSpacing = o.track + 'px';
+  g.fillText(str, x, y); g.restore();
+}
+function rrect(x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
+function bg() { g.fillStyle = C.room; g.fillRect(0, 0, W, H); }
+// Draw a 1920x1080 recording with a camera: focus point (source px) placed at frame centre, scaled by zoom.
+function screen(im, cam) {
+  bg(); if (!im) { text('MISSING FRAME', L.cx, L.cy, 48 * u, { font: F.sans, color: '#FF3B30' }); return; }
+  const sw = im.naturalWidth, sh = im.naturalHeight, base = W / sw, z = base * cam.z;
+  let ox = L.cx - cam.x * (sw / 1920) * z, oy = L.cy - cam.y * (sh / 1080) * z;
+  ox = Math.min(0, Math.max(W - sw * z, ox)); oy = Math.min(0, Math.max(H - sh * z, oy));
+  g.drawImage(im, ox, oy, sw * z, sh * z);
+}
+const cam = (t, keys) => { const k = [[keys[0][0], [keys[0][1], keys[0][2], keys[0][3]]], ...keys.slice(1).map(q => [q[0], [q[1], q[2], q[3]]])];
+  const [x, y, z] = trackN(t, k, 60, 15); return { x, y, z }; };   // slow, heavy camera spring
+const remap = (lt, keys) => kf(lt, keys, ease);                  // shot time -> recording time (holds and speed-ups)
+function subtitle(t) {
+  const s = SUBS.find(s => t >= s.from && t < s.to); if (!s) return;
+  const a = Math.min(clamp((t - s.from) / .12), clamp((s.to - t) / .12));
+  g.save(); g.font = `400 ${34 * u}px ${F.sans}`; const w = g.measureText(s.text).width; g.restore();
+  g.save(); g.globalAlpha = a * .86; g.fillStyle = '#140f10'; rrect(L.cx - w / 2 - 22 * u, H - 112 * u, w + 44 * u, 60 * u, 10 * u); g.fill(); g.restore();
+  text(s.text, L.cx, H - 82 * u, 34 * u, { font: F.sans, color: C.paper, alpha: a });
+}
+function ring(x, y, t0, t) {                                       // click emphasis drawn over the real UI
+  const k = seg(t, t0, t0 + .55); if (k <= 0 || k >= 1) return;
+  g.save(); g.strokeStyle = C.gold; g.globalAlpha = (1 - k) * .9; g.lineWidth = 4 * u;
+  g.beginPath(); g.arc(x, y, (18 + 46 * easeOut(k)) * u, 0, Math.PI * 2); g.stroke(); g.restore();
+}
+// Map a source point (1920x1080 recording) to the frame, using the same maths as screen()
+function toFrame(cm, px, py) {
+  const z = cm.z; let ox = L.cx - cm.x * z, oy = L.cy - cm.y * z;
+  ox = Math.min(0, Math.max(W - 1920 * z, ox)); oy = Math.min(0, Math.max(H - 1080 * z, oy));
+  return [ox + px * z, oy + py * z];
+}
+
+// ---- Shots: { from, to, load(lt), draw(lt, t) }
+const SHOTS = [
+  { from: 0, to: 13.6, draw(lt) {                                 // 01 Hook
+      bg();
+      const a1 = swapAlpha(lt, 0.6, 9.4), a2 = swapAlpha(lt, 4.6, 9.4), a3 = swapAlpha(lt, 9.7, 14);
+      const s1 = spring(lt - .7, ...SPRINGS.heavy), s2 = spring(lt - 4.7, ...SPRINGS.heavy);
+      text('Money sent home for a scan', L.cx, L.cy - 60 * u + (1 - s1) * 24 * u, 86 * u, { alpha: a1 });
+      text('arrives as plain cash.', L.cx, L.cy + 50 * u + (1 - s2) * 24 * u, 86 * u, { italic: true, color: C.text2, alpha: a2 });
+      const s3 = spring(lt - 9.8, ...SPRINGS.heavy);
+      text('Nkwado', L.cx, L.cy - 40 * u + (1 - s3) * 20 * u, 150 * u, { alpha: a3 });
+      text('Pay for the scan, not the promise.', L.cx, L.cy + 80 * u, 44 * u, { italic: true, color: C.gold, alpha: a3 * seg(lt, 10.6, 11.2) });
+  }},
+  { from: 13.6, to: 23.4, async load(lt) { this.im = await seqFrame('send', remap(lt, [[0, 1.0], [9.8, 2.9]])); },
+    draw(lt) {                                                     // 02 The voucher
+      const cm = cam(lt, [[0, 960, 540, 1.0], [3.4, 640, 440, 1.75]]);
+      screen(this.im, cm);
+  }},
+  { from: 23.4, to: 33.4, async load(lt) { this.im = await seqFrame('send', remap(lt, [[0, 2.9], [1.6, 2.95], [2.4, 3.4], [4.6, 4.6], [5.3, 5.2], [10, 7.7]])); },
+    draw(lt) {                                                     // 03 Choose
+      const cm = cam(lt, [[0, 640, 440, 1.75], [0.6, 960, 560, 1.3]]);
+      screen(this.im, cm);
+      const [x1, y1] = toFrame(cm, 1405, 485), [x2, y2] = toFrame(cm, 1205, 630);
+      ring(x1, y1, 1.9, lt); ring(x2, y2, 4.9, lt);
+  }},
+  { from: 33.4, to: 41.6, async load(lt) { this.im = await seqFrame('send', remap(lt, [[0, 8.0], [2.6, 10.6], [3.2, 11.2], [4.2, 16.9], [6.4, 17.6], [8.2, 21.6]])); },
+    draw(lt) {                                                     // 04 Fund
+      const cm = cam(lt, [[0, 960, 560, 1.3], [0.5, 1330, 560, 1.9]]);
+      screen(this.im, cm);
+  }},
+  { from: 41.6, to: 54.0, async load(lt) { this.im = await seqFrame('send', remap(lt, [[0, 21.7], [1.0, 22.3], [2.4, 27.5], [6.5, 29.5], [7.0, 32.3], [12.4, 35.8]])); },
+    draw(lt) {                                                     // 05 Lock and issue
+      const cm = cam(lt, [[0, 1330, 560, 1.9], [0.2, 1200, 600, 1.5], [2.8, 640, 520, 1.9], [6.9, 960, 540, 1.25]]);
+      screen(this.im, cm);
+  }},
+  { from: 54.0, to: 60.0, async load(lt) { this.im = await seqFrame('patient', remap(lt, [[0, 2.0], [6, 7.5]])); },
+    draw(lt) {                                                     // 06 Patient phone
+      bg();
+      const s = spring(lt - .05, ...SPRINGS.base), ph = 900 * u, pw = ph * 390 / 844, x = L.cx - pw / 2, y = (H - ph) / 2 + (1 - s) * 60 * u;
+      g.save(); g.globalAlpha = clamp(s * 1.6);
+      g.fillStyle = '#0e0a0b'; rrect(x - 14 * u, y - 14 * u, pw + 28 * u, ph + 28 * u, 52 * u); g.fill();
+      g.save(); rrect(x, y, pw, ph, 40 * u); g.clip(); if (this.im) g.drawImage(this.im, x, y, pw, ph); g.restore();
+      g.restore();
+      text('Patient view', x - 70 * u, L.cy, 30 * u, { align: 'right', italic: true, color: C.text2, alpha: seg(lt, .6, 1) });
+  }},
+  { from: 60.0, to: 73.0, async load(lt) { this.im = await seqFrame('clinic', remap(lt, [[0, 1.0], [1.6, 2.4], [5.0, 6.6], [7.5, 9.0], [8.6, 10.9], [13, 15.5]])); },
+    draw(lt) {                                                     // 07 Wrong clinic
+      const cm = cam(lt, [[0, 960, 540, 1.0], [0.8, 960, 520, 1.35], [5.0, 1080, 760, 1.6], [8.4, 1000, 820, 1.6]]);
+      screen(this.im, cm);
+  }},
+  { from: 73.0, to: 84.2, async load(lt) { if (lt < 6.4) this.im = await seqFrame('clinic', remap(lt, [[0, 17.4], [1.2, 18.0], [3.0, 22.9], [6.4, 25.5]])); },
+    draw(lt) {                                                     // 08 Right clinic, then the explorer proof
+      if (lt < 6.4) {
+        const cm = cam(lt, [[0, 1000, 820, 1.6], [0.6, 1080, 800, 1.55]]);
+        screen(this.im, cm);
+      } else {
+        const k = lt - 6.4, kk = [[0, 960, 540, 1.0], [0.3, 640, 330, 2.0]];
+        const [cx, cy, cz] = trackN(k, kk.map(q => [q[0], [q[1], q[2], q[3]]]), 120, 22), cm = { x: cx, y: cy, z: cz };
+        screen(IMG.explorer, cm);
+        const [x, y] = toFrame(cm, 404 * 1920 / 2000, 222 * 1080 / 1125);       // "Status: Successful"
+        const a = seg(k, 1.4, 1.8);
+        g.save(); g.strokeStyle = C.gold; g.globalAlpha = a; g.lineWidth = 3 * u; g.beginPath(); g.moveTo(x - 90 * u, y + 26 * u); g.lineTo(x - 90 * u + 300 * u * easeOut(seg(k, 1.4, 2.1)), y + 26 * u); g.stroke(); g.restore();
+      }
+  }},
+  { from: 84.2, to: 94.4, async load(lt) { this.im = await seqFrame('clinic', remap(lt, [[0, 27.2], [10.2, 37.8]])); },
+    draw(lt) {                                                     // 09 Track
+      const cm = cam(lt, [[0, 960, 540, 1.0], [4.0, 960, 620, 1.12]]);
+      screen(this.im, cm);
+  }},
+  { from: 94.4, to: 104.6, draw(lt) {                             // 10 How it works
+      bg();
+      const nodes = [
+        { x: L.x(.19), t: .6, title: 'Sender', sub: 'XLM → USDC by path payment' },
+        { x: L.x(.5), t: 3.2, title: 'Soroban contract', sub: 'holds USDC (Circle, via its SAC)' },
+        { x: L.x(.81), t: 5.8, title: 'Named clinic', sub: 'redeems with the patient code' },
+      ];
+      const y = L.cy - 60 * u, bw = 500 * u, bh = 190 * u;
+      nodes.forEach((n, i) => {
+        const s = spring(lt - n.t, ...SPRINGS.base), a = clamp(s * 1.5);
+        g.save(); g.globalAlpha = a; g.fillStyle = i === 1 ? C.paper : C.room2; g.strokeStyle = i === 1 ? C.paper : 'rgba(244,235,221,.22)'; g.lineWidth = 1.5 * u;
+        rrect(n.x - bw / 2, y - bh / 2 + (1 - s) * 20 * u, bw, bh, 8 * u); g.fill(); g.stroke(); g.restore();
+        text(n.title, n.x, y - 30 * u + (1 - s) * 20 * u, 56 * u, { color: i === 1 ? C.ink : C.paper, alpha: a });
+        text(n.sub, n.x, y + 40 * u + (1 - s) * 20 * u, 28 * u, { font: F.sans, color: i === 1 ? '#6b5a4a' : C.text2, alpha: a });
+        if (i > 0) {                                               // arrow from previous node
+          const k = easeOut(seg(lt, n.t - .5, n.t)), x0 = nodes[i - 1].x + bw / 2 + 16 * u, x1 = n.x - bw / 2 - 16 * u;
+          g.save(); g.strokeStyle = C.gold; g.lineWidth = 2.5 * u; g.globalAlpha = k > 0 ? 1 : 0;
+          g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + (x1 - x0) * k, y); g.stroke();
+          if (k > .95) { g.beginPath(); g.moveTo(x1, y); g.lineTo(x1 - 12 * u, y - 8 * u); g.lineTo(x1 - 12 * u, y + 8 * u); g.closePath(); g.fillStyle = C.gold; g.fill(); }
+          g.restore();
+        }
+      });
+      // refund path: contract back to sender after expiry
+      const k = easeOut(seg(lt, 7.4, 8.4)), ry = y + bh / 2 + 70 * u;
+      g.save(); g.strokeStyle = C.text2; g.setLineDash([8 * u, 8 * u]); g.lineWidth = 2 * u; g.globalAlpha = k > 0 ? 1 : 0;
+      g.beginPath(); g.moveTo(nodes[1].x, y + bh / 2 + 10 * u); g.lineTo(nodes[1].x, ry); g.lineTo(nodes[1].x - (nodes[1].x - nodes[0].x) * k, ry);
+      if (k > .98) g.lineTo(nodes[0].x, y + bh / 2 + 10 * u); g.stroke(); g.restore();
+      text('unused after expiry → returned to sender', (nodes[0].x + nodes[1].x) / 2, ry + 40 * u, 30 * u, { font: F.sans, color: C.text2, alpha: seg(lt, 8.2, 8.8) });
+  }},
+  { from: 104.6, to: 112, draw(lt) {                               // 11 End card, held
+      bg();
+      const s = spring(lt - .3, ...SPRINGS.heavy), a = clamp(s * 1.4);
+      text('Nkwado', L.cx, L.cy - 90 * u + (1 - s) * 16 * u, 150 * u, { alpha: a });
+      text('Pay for the scan, not the promise.', L.cx, L.cy + 20 * u, 44 * u, { italic: true, color: C.gold, alpha: a * seg(lt, .8, 1.3) });
+      text('nkwado.up.railway.app', L.cx, L.cy + 110 * u, 34 * u, { font: F.sans, weight: 500, color: C.paper, alpha: seg(lt, 1.6, 2.1) });
+      text('Stellar Testnet · unaudited · fictional demo clinics', L.cx, L.cy + 170 * u, 24 * u, { font: F.sans, color: C.text3, alpha: seg(lt, 2.4, 2.9) });
+      text('Next: SEP-24 cash-out to naira for clinics', L.cx, L.cy + 206 * u, 24 * u, { font: F.sans, color: C.text3, alpha: seg(lt, 2.8, 3.3) });
+  }},
+];
+
+const XF = .4;                                                    // crossfade length at every seam
+async function paintShot(s, t) { if (s.load) await s.load(t - s.from); g.save(); s.draw(t - s.from, t); g.restore(); }
+async function draw(t) {
+  const i = Math.max(0, SHOTS.findIndex(s => t >= s.from && t < s.to)), s = SHOTS[i === -1 ? SHOTS.length - 1 : i];
+  const next = SHOTS[i + 1];
+  if (next && t > next.from - XF) {                               // outgoing shot, then incoming faded on top
+    const k = ease(seg(t, next.from - XF, next.from));
+    const off = new OffscreenCanvas(W, H), og = off.getContext('2d');
+    await paintShot(s, t); og.drawImage(cv, 0, 0);
+    const tt = next.from + 0.0001; await paintShot(next, Math.max(tt, t));
+    const inc = new OffscreenCanvas(W, H); inc.getContext('2d').drawImage(cv, 0, 0);
+    g.globalAlpha = 1; g.drawImage(off, 0, 0); g.globalAlpha = k; g.drawImage(inc, 0, 0); g.globalAlpha = 1;
+  } else await paintShot(s, t);
+  subtitle(t);
+}
+window.seek = async t => { await window.ready; await draw(t); };
+
+if (!Q.has('render')) {
+  let t = 0, playing = true, last = performance.now();
+  addEventListener('click', () => playing = !playing);
+  addEventListener('keydown', e => { const d = e.shiftKey ? 1 : 1 / FILM.fps; if (e.key === 'ArrowRight') t += d; if (e.key === 'ArrowLeft') t -= d; t = loopT(t, FILM.dur); playing = false; });
+  window.ready.then(async function loop(now = performance.now()) { if (playing) t = loopT(t + (now - last) / 1000, FILM.dur); last = now; await draw(t); document.title = t.toFixed(2); requestAnimationFrame(loop); });
+}
+</script></body></html>

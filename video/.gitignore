@@ -1,0 +1,5 @@
+node_modules/
+out/
+.env
+assets/capture/flow/
+assets/capture/
