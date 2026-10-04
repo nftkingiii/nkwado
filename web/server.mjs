@@ -88,7 +88,7 @@ async function readBody(req) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/api/health') return json(res, 200, { ok: true, demo: Object.keys(keys) });
+  if (url.pathname === '/api/health') return json(res, 200, { ok: true, network: 'testnet', revision: process.env.APP_REVISION || 'local', demo: Object.keys(keys) });
   if (url.pathname === '/api/demo/accounts') {
     return json(res, 200, Object.fromEntries(Object.entries(keys).map(([k, v]) => [k, v.publicKey()])));
   }
