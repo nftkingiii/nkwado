@@ -8,18 +8,21 @@
     "build": "vite build",
     "start": "node server.mjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@stellar/stellar-sdk": "^17.2.1",
     "@creit.tech/stellar-wallets-kit": "^2.7.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "qrcode": "^1.5.4",
+    "@stellar/stellar-sdk": "^17.2.1",
+    "buffer": "^6.0.3",
+    "html-to-image": "^1.11.13",
     "html5-qrcode": "^2.3.8",
-    "buffer": "^6.0.3"
+    "qrcode": "^1.5.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "vite": "^8.3.2",
-    "@vitejs/plugin-react": "^6.1.1"
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.2"
   }
 }

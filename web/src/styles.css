@@ -272,3 +272,43 @@ dd { margin: 4px 0 0; font: 400 20px var(--serif); font-variant-numeric: tabular
 }
 #clinic-code, .scanbox input { font-variant-numeric: tabular-nums; letter-spacing: 0.06em; text-transform: uppercase; }
 .scanbox input::placeholder { text-transform: none; }
+
+/* ---------- enlarged voucher ---------- */
+.voucher[role='button'] { cursor: zoom-in; }
+.voucher[role='button']:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+.voucher[data-open] { visibility: hidden; }
+.voucher.v-xl { --w: 560px; --spine: 60px; }
+.v-xl .v-face { padding: 26px 30px 26px 32px; }
+.v-xl .v-meta { font-size: 13px; }
+.v-xl .v-service { font-size: 50px; margin-top: 18px; }
+.v-xl .v-clinic { font-size: 20px; }
+.v-xl .v-amount { font-size: 46px; }
+.v-xl .v-foot { margin-top: 28px; }
+.v-xl .v-code strong { font-size: 22px; }
+.v-xl .v-stamp { font-size: 20px; right: 26px; bottom: 30px; }
+.v-xl .v-spine span { font-size: 13px; }
+.v-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px 16px; overflow-y: auto; }
+.v-backdrop { position: fixed; inset: 0; background: rgba(14, 10, 11, 0.94); backdrop-filter: blur(8px); }
+.v-stage { position: relative; width: min(560px, 100%); display: grid; justify-items: center; gap: 22px; }
+.v-stage .voucher { transform-origin: top left; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3), 0 40px 80px -30px rgba(0, 0, 0, 0.9); }
+.v-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.v-note { margin: 0; min-height: 1.4em; color: var(--text-2); font: italic 15px var(--serif); text-align: center; }
+body.v-viewing { overflow: hidden; }
+@media (max-width: 640px) {
+  .voucher.v-xl { --spine: 42px; }
+  .v-xl .v-face { padding: 20px 18px 20px 22px; }
+  .v-xl .v-service, .v-xl .v-amount { font-size: 34px; }
+  .v-xl .v-code strong { font-size: 16px; }
+}
+
+/* Print only the enlarged voucher, in its real colours. */
+@media print {
+  @page { margin: 16mm; }
+  html, body { background: #fff !important; }
+  body.v-viewing > :not(.v-modal) { display: none !important; }
+  .v-modal { position: static; padding: 0; display: block; }
+  .v-backdrop, .v-actions, .v-note { display: none !important; }
+  .v-stage { width: auto; display: block; }
+  .voucher { box-shadow: none !important; border: 1px solid #ccc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .v-spine::after { background: none; border-right: 1px dashed rgba(244, 235, 221, 0.6); }
+}
