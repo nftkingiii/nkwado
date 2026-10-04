@@ -37,7 +37,7 @@ Only a short service code and the code's SHA-256 fingerprint go on-chain. No nam
 
 ## Try it
 
-**Live app:** _(Railway URL added on deploy)_
+**Live app:** https://nkwado.up.railway.app (Stellar Testnet, demo mode by default)
 
 The app has two signing modes, switched in the header:
 
