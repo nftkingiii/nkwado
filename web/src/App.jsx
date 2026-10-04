@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import QRCode from 'qrcode';
+import Voucher from './Voucher.jsx';
 import { CLINICS, SERVICES, WINDOWS, serviceName, clinicByAddress } from './config.js';
 import * as S from './stellar.js';
 import { connectWallet, disconnectWallet, demoSigner, getDemoAccounts } from './signer.js';
@@ -128,7 +128,7 @@ function Frame({ tab, onTab, mode, setMode, wallet, setWallet, demoReady, childr
     <div className="app">
       <header className="top">
         <a className="mark" href="#" onClick={(e) => { e.preventDefault(); onTab('send'); }}>
-          <Logo /> Nkwado
+          <Logo /> <span>Nkwado</span>
         </a>
         <nav className="tabs" role="tablist" aria-label="Workflows">
           {TABS.map((t) => (
@@ -172,9 +172,9 @@ function Frame({ tab, onTab, mode, setMode, wallet, setWallet, demoReady, childr
 
 function Logo() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M12 7v10M7 12h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <svg width="26" height="18" viewBox="0 0 26 18" aria-hidden="true">
+      <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h21A1.5 1.5 0 0 1 25 2.5v4a2.5 2.5 0 0 0 0 5v4a1.5 1.5 0 0 1-1.5 1.5h-21A1.5 1.5 0 0 1 1 15.5v-4a2.5 2.5 0 0 0 0-5z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M13 5.5v7M9.5 9h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -268,16 +268,29 @@ function SendTab({ signerFor, mode, wallet }) {
   };
 
   const enough = bal && (bal.usdc || 0) >= svc.price;
+  const winLabel = WINDOWS.find((w) => w.secs === win).label.split(' (')[0];
 
   return (
-    <section className="pane">
+    <section className="pane send">
       <div className="lede">
-        <h1>Pay for the scan, not the promise.</h1>
+        <h1>A scan, paid in advance.</h1>
         <p>
-          Set aside money for one named service at one verified clinic. The patient carries a code. Only that clinic can
-          collect it, and only by seeing the patient. If they never go, the money comes back to you.
+          Lock money for one named service at one verified clinic. The patient carries the voucher. Only that clinic can
+          redeem it, and only by seeing them. If they never go, it comes back to you.
         </p>
       </div>
+
+      <div className="send-grid">
+      <aside className="preview" aria-label="Voucher preview">
+        {done ? (
+          <Voucher id={done.id} service={done.service} clinic={done.clinic} amount={done.amount} expiresAt={done.expiresAt} status="Open" qrText={S.formatCode(done.id, done.secret) || S.redeemLink(done.id, done.secret)} code={S.formatCode(done.id, done.secret)} size="lg" />
+        ) : (
+          <Voucher service={service} clinic={clinic} amount={svc.price} status="Draft" windowLabel={winLabel} size="lg" />
+        )}
+        <p className="preview-note">
+          {done ? 'Issued on Stellar Testnet.' : 'Only a fingerprint of the patient code goes on-chain. No names, no medical details.'}
+        </p>
+      </aside>
 
       <ol className="steps">
         <Step n={1} title="Choose the care" active={step === 1} done={step > 1} onEdit={step < 4 ? () => setStep(1) : null}
@@ -353,7 +366,7 @@ function SendTab({ signerFor, mode, wallet }) {
               )}
               {quote?.none && <p className="warn">No DEX path for XLM to USDC right now.</p>}
               {topupTx && <p className="ok">Bought USDC · <a href={S.txUrl(topupTx)} target="_blank" rel="noreferrer">view transaction</a></p>}
-              <button className="primary" onClick={() => setStep(3)} disabled={!enough}>Continue</button>
+              {enough && <button className="primary" onClick={() => setStep(3)}>Continue</button>}
             </div>
           )}
         </Step>
@@ -365,8 +378,8 @@ function SendTab({ signerFor, mode, wallet }) {
               {WINDOWS.find((w) => w.secs === win).label} after it is locked if nobody redeems it.
             </p>
             <p className="muted">
-              Your browser makes a one-time code for the patient. Only its fingerprint (SHA-256) goes on-chain. No name or
-              medical details are stored.
+              Your browser makes a one-time code for the patient and keeps it. The contract stores only its SHA-256
+              fingerprint.
             </p>
             <button className="primary" onClick={send} disabled={busy === 'pledge'}>
               {busy === 'pledge' ? 'Locking on Stellar…' : `Lock ${svc.price} USDC`}
@@ -374,10 +387,11 @@ function SendTab({ signerFor, mode, wallet }) {
           </div>
         </Step>
 
-        <Step n={4} title="Send the code to the patient" active={step === 4} done={false}>
+        <Step n={4} title="Hand the voucher to the patient" active={step === 4} done={false}>
           {done && <Receipt done={done} onAgain={reset} />}
         </Step>
       </ol>
+      </div>
       {err && <p className="toast err">{err}</p>}
     </section>
   );
@@ -387,7 +401,7 @@ function Step({ n, title, active, done, summary, onEdit, children }) {
   return (
     <li className={`step ${active ? 'active' : ''} ${done ? 'done' : ''}`}>
       <div className="step-head">
-        <span className="num">{done ? '✓' : n}</span>
+        <span className="num" aria-hidden="true">{done ? '✓' : ['i', 'ii', 'iii', 'iv'][n - 1]}</span>
         <h2>{title}</h2>
         {done && summary && <span className="sum">{summary}</span>}
         {done && onEdit && <button className="link" onClick={onEdit}>Change</button>}
@@ -397,33 +411,30 @@ function Step({ n, title, active, done, summary, onEdit, children }) {
   );
 }
 
-function QR({ text, size = 220 }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    QRCode.toDataURL(text, { width: size * 2, margin: 1, color: { dark: '#1d1a16', light: '#fffdf8' } }).then(setSrc);
-  }, [text, size]);
-  return src ? <img className="qr" src={src} width={size} height={size} alt="Patient redeem code" /> : <div className="qr" style={{ width: size, height: size }} />;
-}
-
 function Receipt({ done, onAgain }) {
   const link = S.redeemLink(done.id, done.secret);
+  const code = S.formatCode(done.id, done.secret);
   const c = clinicByAddress(done.clinic);
-  const wa = `https://wa.me/?text=${encodeURIComponent(`Your ${serviceName(done.service)} at ${c.name} is paid. Show this code at reception: ${link}`)}`;
-  const [copied, setCopied] = useState(false);
+  const message = `Your ${serviceName(done.service)} at ${c.name}, ${c.city} is paid. At reception, give this voucher code: ${code}. Your voucher with its QR code: ${link}`;
+  const wa = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  const [copied, setCopied] = useState('');
+  const copy = (what, text) => navigator.clipboard.writeText(text).then(() => setCopied(what));
   return (
     <div className="receipt">
-      <QR text={link} />
       <div>
-        <p className="big">Pledge #{done.id} is locked.</p>
+        <p className="big">Voucher No. {String(done.id).padStart(4, '0')} is issued.</p>
         <p>
           {done.amount} USDC for {serviceName(done.service)} at {c.name}. Refundable after {fmtTime(done.expiresAt)}.
         </p>
-        <p className="muted">Send this link to the patient. Anyone holding it can present it, so share it privately.</p>
+        <p className="code-big" aria-label="Voucher code">{code}</p>
+        <p className="muted">
+          The patient gives this code at reception, or shows the QR code on the voucher. Anyone holding it can use it, so
+          share it privately.
+        </p>
         <div className="row">
-          <button className="secondary" onClick={() => navigator.clipboard.writeText(link).then(() => setCopied(true))}>
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
+          <button className="primary" onClick={() => copy('code', code)}>{copied === 'code' ? 'Code copied' : 'Copy code'}</button>
           <a className="secondary" href={wa} target="_blank" rel="noreferrer">Share on WhatsApp</a>
+          <button className="secondary" onClick={() => copy('link', link)}>{copied === 'link' ? 'Link copied' : 'Copy voucher link'}</button>
           <a className="secondary" href={link} target="_blank" rel="noreferrer">Open patient view</a>
         </div>
         <p className="tx">
@@ -460,18 +471,21 @@ function PatientCard({ route, onClinic }) {
       {err && <p className="toast err">{err}</p>}
       {p && (
         <div className="card">
-          <h1>{serviceName(p.service)}</h1>
-          <p className="where">{c ? `${c.name}, ${c.city}` : S.short(p.clinic)}</p>
-          <QR text={S.redeemLink(route.id, route.secret)} size={240} />
+          <Voucher id={p.id} service={p.service} clinic={p.clinic} amount={p.amount} expiresAt={p.expiresAt} closedAt={p.closedAt} status={voucherStatus(p, now)} qrText={p.status === 'Open' ? S.formatCode(route.id, route.secret) || S.redeemLink(route.id, route.secret) : null} code={p.status === 'Open' ? S.formatCode(route.id, route.secret) : null} size="lg" />
           <StatusLine p={p} now={now} />
-          {match === false && <p className="warn">This code does not match pledge #{p.id}.</p>}
-          <p className="muted">Show this code at reception. It works once, only at this clinic, until {fmtTime(p.expiresAt)}.</p>
+          {match === false && <p className="warn">This code does not match voucher No. {p.id}.</p>}
+          <p className="muted">At reception{c ? ` at ${c.name}` : ''}, give the code or show the QR. It works once, only there, until {fmtTime(p.expiresAt)}.</p>
           <button className="link" onClick={onClinic}>I work at the clinic</button>
         </div>
       )}
-      {!p && !err && <p className="muted">Loading pledge…</p>}
+      {!p && !err && <p className="muted">Loading voucher…</p>}
     </section>
   );
+}
+
+function voucherStatus(p, now) {
+  if (p.status === 'Redeemed' || p.status === 'Refunded') return p.status;
+  return now >= p.expiresAt ? 'Expired' : 'Open';
 }
 
 function StatusLine({ p, now }) {
@@ -498,7 +512,7 @@ function ClinicTab({ signerFor, mode, wallet, demoClinicRole, setDemoClinicRole,
 
   useEffect(() => {
     if (handoff) {
-      setInput(S.redeemLink(handoff.id, handoff.secret));
+      setInput(S.formatCode(handoff.id, handoff.secret) || S.redeemLink(handoff.id, handoff.secret));
       setRoute(handoff);
       clearHandoff();
     }
@@ -530,7 +544,7 @@ function ClinicTab({ signerFor, mode, wallet, demoClinicRole, setDemoClinicRole,
   const submitInput = (text) => {
     const r = S.parseRedeem(text);
     if (!r) {
-      setErr('That is not a Nkwado patient code.');
+      setErr('That code is not in the right format. It looks like 0005-K7QF-M2XA-9TPR-HD3W.');
       return;
     }
     setRoute(r);
@@ -558,8 +572,8 @@ function ClinicTab({ signerFor, mode, wallet, demoClinicRole, setDemoClinicRole,
   return (
     <section className="pane">
       <div className="lede">
-        <h1>Patient at reception.</h1>
-        <p>Scan the patient's code. Nkwado checks it against the pledge on Stellar. Redeeming pays your clinic at once.</p>
+        <h1>A patient at reception.</h1>
+        <p>Type the code the patient gives you, or scan the QR on their voucher. Nkwado checks it against the contract on Stellar. Redeeming pays your clinic at once.</p>
       </div>
 
       <div className="clinic-as">
@@ -581,8 +595,8 @@ function ClinicTab({ signerFor, mode, wallet, demoClinicRole, setDemoClinicRole,
 
       <div className="scanbox">
         <div className="row">
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Paste the patient's link" onKeyDown={(e) => e.key === 'Enter' && submitInput(input)} />
-          <button className="secondary" onClick={() => submitInput(input)}>Check</button>
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="0005-K7QF-M2XA-9TPR-HD3W" aria-label="Voucher code" autoCapitalize="characters" autoComplete="off" spellCheck={false} onKeyDown={(e) => e.key === 'Enter' && submitInput(input)} />
+          <button className="secondary" onClick={() => submitInput(input)}>Check code</button>
           <button className="secondary" onClick={() => setScan((v) => !v)}>{scan ? 'Stop camera' : 'Scan QR'}</button>
         </div>
         {scan && (
@@ -598,21 +612,17 @@ function ClinicTab({ signerFor, mode, wallet, demoClinicRole, setDemoClinicRole,
 
       {p && (
         <div className="verify">
-          <h2>Pledge #{p.id}</h2>
-          <dl>
-            <div><dt>Service</dt><dd>{serviceName(p.service)}</dd></div>
-            <div><dt>Amount</dt><dd>{p.amount} USDC</dd></div>
-            <div><dt>For clinic</dt><dd>{pc ? pc.name : S.short(p.clinic)}</dd></div>
-            <div><dt>Expires</dt><dd>{fmtTime(p.expiresAt)}</dd></div>
-          </dl>
+          <Voucher id={p.id} service={p.service} clinic={p.clinic} amount={p.amount} expiresAt={p.expiresAt} closedAt={p.closedAt} status={voucherStatus(p, now)} />
+          <div className="verify-side">
+          <h2>Checked against Stellar</h2>
           <ul className="checks">
             <Check ok={match} label={match ? 'Code matches the on-chain fingerprint' : 'Code does not match'} />
-            <Check ok={p.status === 'Open'} label={p.status === 'Open' ? 'Pledge is open' : `Pledge is ${p.status.toLowerCase()}`} />
+            <Check ok={p.status === 'Open'} label={p.status === 'Open' ? 'Voucher is open' : `Voucher is ${p.status.toLowerCase()}`} />
             <Check ok={now < p.expiresAt} label={now < p.expiresAt ? `Not expired (${relative(p.expiresAt, now)})` : 'Expired'} />
             <Check ok={forMe} label={forMe ? 'Addressed to your clinic' : `Addressed to ${pc ? pc.name : 'another clinic'}, not you`} />
           </ul>
           {ok ? (
-            <p className="ok big">Paid {p.amount} USDC to your clinic · <a href={S.txUrl(ok)} target="_blank" rel="noreferrer">view transaction</a></p>
+            <p className="ok big">Paid {p.amount} USDC to your clinic. <a href={S.txUrl(ok)} target="_blank" rel="noreferrer">View transaction</a></p>
           ) : (
             <>
               <button className="primary" onClick={doRedeem} disabled={busy || p.status !== 'Open'}>
@@ -623,6 +633,7 @@ function ClinicTab({ signerFor, mode, wallet, demoClinicRole, setDemoClinicRole,
               )}
             </>
           )}
+          </div>
         </div>
       )}
       {err && <p className="toast err">{err}</p>}
@@ -727,20 +738,20 @@ function TrackTab({ signerFor }) {
   return (
     <section className="pane">
       <div className="lede">
-        <h1>Every pledge, on the record.</h1>
-        <p>Each pledge ends one of two ways: paid to the named clinic, or returned to the sender. Both are public on Stellar.</p>
+        <h1>Every voucher, on the record.</h1>
+        <p>Each voucher ends one of two ways: redeemed by the named clinic, or returned to the sender. Both are public on Stellar.</p>
       </div>
       <div className="row lookup">
-        <input value={lookup} onChange={(e) => setLookup(e.target.value.replace(/\D/g, ''))} placeholder="Pledge number" onKeyDown={(e) => e.key === 'Enter' && find()} />
+        <input value={lookup} onChange={(e) => setLookup(e.target.value.replace(/\D/g, ''))} placeholder="Voucher number" aria-label="Voucher number" onKeyDown={(e) => e.key === 'Enter' && find()} />
         <button className="secondary" onClick={find} disabled={!lookup}>Look up</button>
         <button className="link" onClick={load}>Refresh</button>
       </div>
-      {one && <PledgeRow p={one} now={now} onRefund={doRefund} busy={busy} />}
+      {one && <ul className="shelf single"><PledgeRow p={one} now={now} onRefund={doRefund} busy={busy} /></ul>}
       {err && <p className="toast err">{err}</p>}
-      <h2 className="sub">Recent activity</h2>
+      <h2 className="sub">Recent vouchers</h2>
       {items === null && <p className="muted">Reading contract events…</p>}
-      {items?.length === 0 && <p className="muted">No pledges in the last few days.</p>}
-      <ul className="ledger">
+      {items?.length === 0 && <p className="muted">No vouchers issued in the last few days.</p>}
+      <ul className="shelf">
         {items?.map(({ id, events }) =>
           details[id] ? <PledgeRow key={id} p={details[id]} events={events} now={now} onRefund={doRefund} busy={busy} /> : null,
         )}
@@ -749,19 +760,17 @@ function TrackTab({ signerFor }) {
   );
 }
 
+const EVENT_LABEL = { pledged: 'Issued', redeemed: 'Redeemed', refunded: 'Returned' };
+
 function PledgeRow({ p, events = [], now, onRefund, busy }) {
-  const c = clinicByAddress(p.clinic);
   const canRefund = p.status === 'Open' && now >= p.expiresAt;
   return (
-    <li className={`prow ${p.status.toLowerCase()}`}>
-      <div className="pmain">
-        <strong>#{p.id} · {serviceName(p.service)}</strong>
-        <span>{p.amount} USDC · {c ? c.name : S.short(p.clinic)}</span>
-      </div>
+    <li className="prow">
+      <Voucher id={p.id} service={p.service} clinic={p.clinic} amount={p.amount} expiresAt={p.expiresAt} closedAt={p.closedAt} status={voucherStatus(p, now)} size="sm" />
       <StatusLine p={p} now={now} />
       <div className="pev">
         {events.map((e) => (
-          <a key={e.tx + e.kind} href={S.txUrl(e.tx)} target="_blank" rel="noreferrer">{e.kind}</a>
+          <a key={e.tx + e.kind} href={S.txUrl(e.tx)} target="_blank" rel="noreferrer">{EVENT_LABEL[e.kind] || e.kind} tx</a>
         ))}
         {canRefund && (
           <button className="secondary sm" onClick={() => onRefund(p.id)} disabled={busy === p.id}>

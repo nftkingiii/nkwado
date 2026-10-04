@@ -15,6 +15,7 @@ import { NETWORK, CONTRACT_ID, USDC, READ_SOURCE, ERRORS } from './config.js';
 export const server = new rpc.Server(NETWORK.rpcUrl);
 export const horizon = new Horizon.Server(NETWORK.horizonUrl);
 const contract = new Contract(CONTRACT_ID);
+const DEPLOY_LEDGER = 5002022;
 export const usdcAsset = new Asset(USDC.code, USDC.issuer);
 
 const STROOPS = 10_000_000n;
@@ -23,10 +24,28 @@ export const fromStroops = (s) => Number(BigInt(s)) / 1e7;
 
 // ---------- codes ----------
 
+// Patient codes are 16 Crockford base32 characters (80 bits), short enough to
+// read out at reception. Only the SHA-256 of the code goes on-chain, and the
+// clinic's signature is still required to redeem.
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
 export function newSecret() {
   const b = new Uint8Array(16);
   crypto.getRandomValues(b);
-  return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return [...b].map((x) => CROCKFORD[x & 31]).join('');
+}
+
+// Undo common misreads (O→0, I/L→1) and drop separators.
+function normalizeCode(raw) {
+  return String(raw).toUpperCase().replace(/[\s\-·.]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+}
+
+const pad4 = (id) => String(id).padStart(4, '0');
+
+// "0005-K7QF-M2XA-9TPR-HD3W": voucher number, then the code in groups of four.
+export function formatCode(id, secret) {
+  if (secret.length !== 16) return null; // vouchers issued before short codes existed
+  return `${pad4(id)}-${secret.match(/.{4}/g).join('-')}`;
 }
 
 export async function sha256Hex(text) {
@@ -40,9 +59,20 @@ export function redeemLink(id, secret) {
   return `${location.origin}/#redeem/${id}/${secret}`;
 }
 
+// Accepts a typed or scanned code ("0005-K7QF-M2XA-9TPR-HD3W", any spacing or
+// case) and patient links, including the older 32-hex-character links.
 export function parseRedeem(text) {
-  const m = String(text).match(/redeem\/(\d+)\/([0-9a-f]{32})/i);
-  return m ? { id: Number(m[1]), secret: m[2].toLowerCase() } : null;
+  const s = String(text).trim();
+  const legacy = s.match(/redeem\/(\d+)\/([0-9a-f]{32})(?![0-9a-z])/i);
+  if (legacy) return { id: Number(legacy[1]), secret: legacy[2].toLowerCase() };
+  const link = s.match(/redeem\/(\d+)\/([0-9a-z]{16})(?![0-9a-z])/i);
+  if (link) return { id: Number(link[1]), secret: normalizeCode(link[2]) };
+  const code = s.match(/^(\d{1,10})[\s\-·.]+([0-9a-z\s\-·.]+)$/i);
+  if (code) {
+    const secret = normalizeCode(code[2]);
+    if (secret.length === 16 && [...secret].every((ch) => CROCKFORD.includes(ch))) return { id: Number(code[1]), secret };
+  }
+  return null;
 }
 
 // ---------- errors ----------
@@ -124,15 +154,24 @@ export async function ledgerNow() {
 
 // Recent contract activity from RPC events (testnet RPC keeps about 7 days).
 export async function recentActivity(limit = 25) {
-  const latest = await server.getLatestLedger();
-  const startLedger = Math.max(latest.sequence - 17280 * 6, 1);
-  const res = await server.getEvents({
-    startLedger,
-    filters: [{ type: 'contract', contractIds: [CONTRACT_ID] }],
-    limit: 200,
-  });
+  // RPC scans a bounded ledger range per request, so walk forward in chunks
+  // from the later of the deploy ledger and the retention window.
+  const latest = (await server.getLatestLedger()).sequence;
+  const CHUNK = 8000;
+  let start = Math.max(DEPLOY_LEDGER, latest - 17280 * 6);
+  const events = [];
+  while (start <= latest) {
+    const res = await server.getEvents({
+      startLedger: start,
+      endLedger: Math.min(start + CHUNK, latest + 1),
+      filters: [{ type: 'contract', contractIds: [CONTRACT_ID] }],
+      limit: 1000,
+    });
+    events.push(...res.events);
+    start += CHUNK;
+  }
   const out = [];
-  for (const ev of res.events) {
+  for (const ev of events) {
     try {
       const topics = ev.topic.map((t) => scValToNative(t));
       const kind = topics[0];
