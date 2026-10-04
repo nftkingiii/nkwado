@@ -44,12 +44,12 @@ export const ERRORS = {
   3: 'That clinic is not verified in the registry.',
   4: 'Amount must be above zero.',
   5: 'Expiry must be between one minute and 90 days from now.',
-  6: 'No pledge with that number.',
-  7: 'This pledge is already closed (redeemed or refunded).',
-  8: 'This pledge belongs to a different clinic. Only the named clinic can redeem it.',
-  9: 'This pledge has expired. It can only be refunded to the sender now.',
-  10: 'The code does not match this pledge.',
-  11: 'This pledge has not expired yet, so it cannot be refunded.',
+  6: 'No voucher with that number.',
+  7: 'This voucher is already closed (redeemed or returned).',
+  8: 'This voucher belongs to a different clinic. Only the named clinic can redeem it.',
+  9: 'This voucher has expired. It can only be returned to the sender now.',
+  10: 'The code does not match this voucher.',
+  11: 'This voucher has not expired yet, so it cannot be returned.',
 };
 
 export const serviceName = (code) => SERVICES.find((s) => s.code === code)?.name || code;

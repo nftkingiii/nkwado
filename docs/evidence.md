@@ -23,3 +23,9 @@ All transactions below are on **Stellar Testnet**. They were produced by scripte
 1. Pledge created: [eb912d76…](https://stellar.expert/explorer/testnet/tx/eb912d76d1511b0bcfe3f0f4cb56d07a5d99a2aef7b629bd468dd76827e4f5de)
 2. Refund before expiry rejected with `NotExpired` (#11).
 3. After expiry, refund returned 10 USDC to the sender: [c078af9a…](https://stellar.expert/explorer/testnet/tx/c078af9a8fe69fa5c83484226c06ade057e6cc349f75b2c922dc1eb44a99d3d0)
+
+## Live web app: voucher No. 0007 (pelvic ultrasound, 20 USDC)
+Run through the deployed app at https://nkwado.up.railway.app (revision `e784543`, demo signing mode) on 2026-10-04. The clinic typed the short voucher code.
+1. Voucher issued for clinic B: [d1d19305…](https://stellar.expert/explorer/testnet/tx/d1d193052db2b491fa68eb84bb05c13abb5f5af56c40f0f4a2f1a000c55bcf0b)
+2. Clinic A entered the code and tried to redeem: refused by the contract with `WrongClinic` (#8).
+3. Clinic B redeemed with the code; 20 USDC paid to clinic B: [a61ce204…](https://stellar.expert/explorer/testnet/tx/a61ce2042d8d75990be87fa730bc6d2c7747ef0ade49e519decaf671acf69306)
